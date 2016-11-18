@@ -1,19 +1,30 @@
+"""
+Import PYSIDE modules to work with
+"""
 from PySide import QtCore
 from PySide import QtGui
+import numpy
 
 class BakeAnimation(QtGui.QWidget):
     def __init__(self, parent=None):
         QtGui.QWidget.__init__(self, parent)
         
-# FETCH TIMELINE VARIABLES AUTOMATICALLY ON INIT        
+#FETCH TIMELINE VARIABLES AUTOMATICALLY ON INIT.
+#Also here I create the lists that will be used for frames to 
+#keyframe and frames to remove keyframes from.
+#The axis tuple is declared, which includes all transforms.
+
         frameRange = hou.playbar.playbackRange
         self.firstFrame = int(frameRange()[0])
         self.lastFrame = int(frameRange()[1])
         self.framesToKey = [self.firstFrame,self.lastFrame]
         self.framesToClean = [self.firstFrame,self.lastFrame]
         self.axis=('tx','ty','tz','rx','ry','rz')     
-        
-# GET SELECTED NODES AND ASSIGN THEM TO VARIABLES
+
+#GET SELECTED NODES AND ASSIGN THEM TO VARIABLES.
+#Here I should handle also an error message in case not enough nodes are selected.
+#The if loop checks how many nodes are selected and passes them to variables accordingly.
+
         self.nodes = hou.selectedNodes()
         self.selected = len(self.nodes)
         
@@ -28,14 +39,17 @@ class BakeAnimation(QtGui.QWidget):
         elif self.selected > 2:
                 self.dn={}
                 for node in range(self.selected-1):
-                        self.dn['self.geoAnim{0}'.format(node)]=self.nodes[node]
+                        self.dn['geoAnim{0}'.format(node)]=self.nodes[node]
                 self.geoBake=self.nodes[-1]
                 print self.dn
                 print self.geoBake
             
 # BUILD INTERFACE NODES AND ASSIGN THEM TO VARIABLES
-    # CREATE NESTED LAYOUTS OF GRID INSIDE A VBOX
     
+        """
+        Create Layout for the interface inside a Grid.
+        Here I create all the different fields for the QT interface.
+        """
         layout = QtGui.QGridLayout()        
 
         self.setGeometry(500, 300, 250, 110)
@@ -51,11 +65,11 @@ class BakeAnimation(QtGui.QWidget):
         
         lPreRoll = QtGui.QLabel('Pre Roll')
         lPreRoll.setAlignment(QtCore.Qt.AlignRight)
-        self.preRoll = QtGui.QLineEdit('3')
+        self.preRoll = QtGui.QLineEdit('0')
         
         lPostRoll = QtGui.QLabel('Post Roll')
         lPostRoll.setAlignment(QtCore.Qt.AlignRight)
-        self.postRoll = QtGui.QLineEdit('3')
+        self.postRoll = QtGui.QLineEdit('0')
         
         lStep = QtGui.QLabel('Step')
         lStep.setAlignment(QtCore.Qt.AlignRight)
@@ -93,7 +107,9 @@ class BakeAnimation(QtGui.QWidget):
         
         self.setLayout(layout)
 
-        
+        """
+        Make all the connections of the different fields and buttons.
+        """
         self.firstF.textChanged.connect(self.frameRanges)
         self.lastF.textChanged.connect(self.frameRanges)
         self.preRoll.textChanged.connect(self.frameRanges)
@@ -103,11 +119,20 @@ class BakeAnimation(QtGui.QWidget):
         if self.selected <=2:
             self.buttonBake.clicked.connect(self.bakeAnim)
         elif self.selected >2:
-            self.buttonBake.clicked.connect(self.test)
+            self.buttonBake.clicked.connect(self.bakeAnimMulti)
         
+        """
+        Initialize the Functions needed on spawn.
+        """
         self.frameRanges()
-        
+
+    """
+    Frame Ranges function.
+    This function queries frame ranges and populates the framesToKey and toClean lists
+    """    
     def frameRanges(self):
+        self.firstFrame = int(self.firstF.text())
+        self.lastFrame = int(self.lastF.text())
         self.framesToKey = [self.firstFrame,self.lastFrame]
         self.framesToClean = [self.firstFrame,self.lastFrame]
         
@@ -131,6 +156,12 @@ class BakeAnimation(QtGui.QWidget):
         print self.framesToClean
         print self.framesToKey
 
+    """
+    Bake animation functions.
+    These are the baking functions at the core of the tool.
+    There are two that account for either the baking of only one or more tranforms.
+    THis is achieve by moving frame by frame and matching the world transform and setting the keyframe.
+    """  
     def bakeAnim(self):
         for i in self.framesToClean:
             for ax in self.axis:
@@ -141,8 +172,8 @@ class BakeAnimation(QtGui.QWidget):
             setKey = hou.Keyframe()
             setKey.setFrame(i)
         
-            xform = self.geoAnim.worldTransform()
-            self.geoBake.setWorldTransform(xform)
+            xform = self.geoAnim.worldtransform()
+            self.geoBake.setWorldtransform(xform)
             
             for ax in self.axis:
                 
@@ -153,39 +184,53 @@ class BakeAnimation(QtGui.QWidget):
                 setKey.setInSlopeAuto(1)
                 setKey.setSlopeAuto(1)
 
-    def test(self):
-        dx={}
-        print self.dn
-        for node in range(self.selected-1):
-            dx['xform{0}'.format(node)]=self.dn[node].worldTransform()
-        print dx
-
-
-    # def bakeAnimMulti(self):
-    #     for i in self.framesToClean:
-    #         for ax in self.axis:
-    #             self.geoBake.parm(ax).deleteAllKeyframes()
+    def bakeAnimMulti(self):
+        for i in self.framesToClean:
+            for ax in self.axis:
+                self.geoBake.parm(ax).deleteAllKeyframes()
     
-    #     for i in self.framesToKey:
-    #         hou.setFrame(i)
-    #         setKey = hou.Keyframe()
-    #         setKey.setFrame(i)
+        for i in self.framesToKey:
+            hou.setFrame(i)
+            setKey = hou.Keyframe()
+            setKey.setFrame(i)
 
-    #         dx={}
-    #         for node in range(self.selected-1):
-    #             dx['xform{0}'.format(node)]=self.dn{0}.worldTransform()
-
-    #         # xform = self.geoAnim.worldTransform()
-    #         self.geoBake.setWorldTransform(xform)
+            dx={}
             
-    #         for ax in self.axis:
+            for node in self.dn:
+                dx['xform{0}'.format(node)]=self.dn[node].worldTransform()
                 
-    #             anim = self.geoBake.parm(ax).eval()
-    #             setKey.setValue(anim)
-    #             setKey.setExpression(self.dropDown.currentText()+'()')
-    #             self.geoBake.parm(ax).setKeyframe(setKey)
-    #             setKey.setInSlopeAuto(1)
-    #             setKey.setSlopeAuto(1)
+            getMatrices = [ v for v in dx.values() ]
+
+            print getMatrices
+
+            XM = [M.explode(transform_order='srt', rotate_order='xyz', pivot=hou.Vector3()) for M in getMatrices]
+
+            print XM
+            
+            tra = hou.Vector3(numpy.sum([d['translate'] for d in XM],axis=0)*(1/float((self.selected-1))))
+            rot = hou.Vector3(numpy.sum([d['rotate'] for d in XM],axis=0)*(1/float((self.selected-1))))
+            sca = hou.Vector3(numpy.sum([d['scale'] for d in XM],axis=0)*(1/float((self.selected-1))))
+
+            NM = {'translate':tra,'rotate':rot,'scale':sca}
+
+            xform=hou.hmath.buildTransform(NM)
+
+            print xform
+
+
+            # hou.node('/obj/torusTest').setWorldtransform(xform)
+
+
+            # self.geoBake.setWorldtransform(xform)
+            
+            # for ax in self.axis:
+            #     anim = self.geoBake.parm(ax).eval()
+            #     setKey.setValue(anim)
+            #     setKey.setExpression(self.dropDown.currentText()+'()')
+            #     self.geoBake.parm(ax).setKeyframe(setKey)
+            #     setKey.setInSlopeAuto(1)
+            #     setKey.setSlopeAuto(1)
+
 
 dialog = BakeAnimation()
 dialog.show()
