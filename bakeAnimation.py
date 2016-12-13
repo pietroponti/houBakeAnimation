@@ -10,22 +10,23 @@ class BakeAnimation(QtGui.QWidget):
         QtGui.QWidget.__init__(self, parent, QtCore.Qt.WindowStaysOnTopHint)
 
 # FETCH TIMELINE VARIABLES AUTOMATICALLY ON INIT.
-# Also here I create the lists that will be used for frames to 
+# Here I create the lists that will be used for frames to 
 # keyframe and frames to remove keyframes from.
-# The axis tuple is declared, which includes all transforms.
+# The axis list is declared, which includes all transforms as default.
 
         frameRange = hou.playbar.playbackRange
         self.firstFrame = int(frameRange()[0])
         self.lastFrame = int(frameRange()[1])
         self.framesToKey = [self.firstFrame,self.lastFrame]
         self.framesToClean = [self.firstFrame,self.lastFrame]
-        self.axis=('tx','ty','tz','rx','ry','rz','sx','sy','sz')
+        self.axis=['tx','ty','tz','rx','ry','rz','sx','sy','sz']
 
 
 # GET SELECTED NODES AND ASSIGN THEM TO VARIABLES.
 # Here I should handle also an error message in case not enough nodes are selected.
 # The if loop checks how many nodes are selected and passes them to variables accordingly.
-
+# geoAnim are the nodes from which to inherit transforms.
+# geoBake is the last selected node and the one where the transforms will be baked to.
         
         self.nodes = hou.selectedNodes()
         self.selected = len(self.nodes)
@@ -39,11 +40,11 @@ class BakeAnimation(QtGui.QWidget):
             self.geoBake=self.nodes[1]
 
         elif self.selected > 2:
-                self.dn={}
+                self.dGeoAnim={}
                 for node in range(self.selected-1):
-                        self.dn['geoAnim{0}'.format(node)]=self.nodes[node]
+                        self.dGeoAnim['geoAnim{0}'.format(node)]=self.nodes[node]
                 self.geoBake=self.nodes[-1]
-                print self.dn
+                print self.dGeoAnim
                 print self.geoBake
 
 
@@ -131,6 +132,7 @@ class BakeAnimation(QtGui.QWidget):
 
         
         # Make all the connections of the different fields and buttons.
+        # Everytime any change is made in a frame related field, the frameRanges function is re-run.
         
         self.firstF.textChanged.connect(self.frameRanges)
         self.lastF.textChanged.connect(self.frameRanges)
@@ -145,7 +147,7 @@ class BakeAnimation(QtGui.QWidget):
         
         
         # Initialize the Functions needed on spawn.
-        
+
         self.frameRanges()
 
 
@@ -154,7 +156,7 @@ class BakeAnimation(QtGui.QWidget):
 
 
     # Frame Ranges function.
-    # This function queries frame ranges and populates the framesToKey and toClean lists
+    # This function queries frame ranges and populates the framesToKey and framesToClean lists
    
     def frameRanges(self):
         self.firstFrame = int(self.firstF.text())
@@ -211,10 +213,15 @@ class BakeAnimation(QtGui.QWidget):
                 setKey.setSlopeAuto(1)
 
     def bakeAnimMulti(self):
+        # For each frame in the list self.framesToClean,
+        # go through each axis of the geo to bake and remove keyframes.
         for i in self.framesToClean:
             for ax in self.axis:
                 self.geoBake.parm(ax).deleteAllKeyframes()
 
+        # Reset the self.axis list to empty.
+        # Check which transforms are checked on the interface.
+        # For the ones active, append the x, y and z axis to the list
         self.axis = []
 
         if self.checkTra.isChecked() == True:
@@ -224,17 +231,19 @@ class BakeAnimation(QtGui.QWidget):
         if self.checkSca.isChecked() == True:
             self.axis.extend(['sx','sy','sz'])
 
+        # For each frame in the framesToKey list a few operations are run.
+
         for i in self.framesToKey:
             hou.setFrame(i)
             setKey = hou.Keyframe()
             setKey.setFrame(i)
 
-            dx={}
+            dWorldTransforms={}
             
-            for node in self.dn:
-                dx['xform{0}'.format(node)]=self.dn[node].worldTransform()
+            for node in self.dGeoAnim:
+                dWorldTransforms['xform{0}'.format(node)]=self.dGeoAnim[node].worldTransform()
                 
-            getMatrices = [ v for v in dx.values() ]
+            getMatrices = [ v for v in dWorldTransforms.values() ]
 
             XM = [M.explode(transform_order='srt', rotate_order='xyz', pivot=hou.Vector3()) for M in getMatrices]
             
@@ -246,10 +255,8 @@ class BakeAnimation(QtGui.QWidget):
             
             if self.checkTra.isChecked() == True:
                 NM['translate']=tra
-                
             if self.checkRot.isChecked() == True:
-                NM['rotate']=rot
-                
+                NM['rotate']=rot  
             if self.checkSca.isChecked() == True:
                 NM['scale']=sca
                 
